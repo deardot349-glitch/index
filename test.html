@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SocialApp</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f2f5;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #1877f2;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #1877f2;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            background-color: #166fe5;
+        }
+        
+        .switch-form {
+            text-align: center;
+            margin-top: 15px;
+        }
+        
+        .switch-form a {
+            color: #1877f2;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .error {
+            color: red;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        
+        .success {
+            color: green;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        
+        #dashboard {
+            max-width: 800px;
+        }
+        
+        .post {
+            background: white;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #1877f2;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 10px;
+            font-weight: bold;
+        }
+        
+        #postForm {
+            margin-bottom: 20px;
+        }
+        
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            resize: vertical;
+            min-height: 80px;
+        }
+        
+        .logout {
+            background: #ff4444;
+            margin-top: 20px;
+        }
+        
+        .logout:hover {
+            background: #cc0000;
+        }
+    </style>
+</head>
+<body>
+    <!-- Auth Forms -->
+    <div id="authContainer" class="container">
+        <h1>SocialApp</h1>
+        
+        <!-- Login Form -->
+        <div id="loginForm">
+            <div class="error" id="loginError"></div>
+            <div class="form-group">
+                <input type="email" id="loginEmail" placeholder="Email" required>
+            </div>
+            <div class="form-group">
+                <input type="password" id="loginPassword" placeholder="Password" required>
+            </div>
+            <button onclick="login()">Log In</button>
+            <div class="switch-form">
+                Don't have an account? <a onclick="showSignup()">Sign up</a>
+            </div>
+        </div>
+        
+        <!-- Signup Form -->
+        <div id="signupForm" class="hidden">
+            <div class="error" id="signupError"></div>
+            <div class="form-group">
+                <input type="text" id="signupName" placeholder="Full Name" required>
+            </div>
+            <div class="form-group">
+                <input type="email" id="signupEmail" placeholder="Email" required>
+            </div>
+            <div class="form-group">
+                <input type="password" id="signupPassword" placeholder="Password" required>
+            </div>
+            <button onclick="signup()">Sign Up</button>
+            <div class="switch-form">
+                Already have an account? <a onclick="showLogin()">Log in</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="dashboard" class="container hidden">
+        <h1>Welcome to SocialApp</h1>
+        <div id="userInfo"></div>
+        
+        <!-- Create Post -->
+        <div id="postForm">
+            <textarea id="postContent" placeholder="What's on your mind?"></textarea>
+            <button onclick="createPost()">Post</button>
+        </div>
+        
+        <!-- Posts Feed -->
+        <div id="postsFeed"></div>
+        
+        <button class="logout" onclick="logout()">Log Out</button>
+    </div>
+
+    <script>
+        // Supabase configuration
+        const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+        const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+        
+        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        // DOM Elements
+        const authContainer = document.getElementById('authContainer');
+        const dashboard = document.getElementById('dashboard');
+        const loginForm = document.getElementById('loginForm');
+        const signupForm = document.getElementById('signupForm');
+        const postsFeed = document.getElementById('postsFeed');
+        const userInfo = document.getElementById('userInfo');
+        
+        // Check if user is already logged in
+        checkAuth();
+        
+        async function checkAuth() {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                showDashboard(user);
+            } else {
+                showLogin();
+            }
+        }
+        
+        function showLogin() {
+            authContainer.classList.remove('hidden');
+            dashboard.classList.add('hidden');
+            loginForm.classList.remove('hidden');
+            signupForm.classList.add('hidden');
+            document.getElementById('loginError').textContent = '';
+        }
+        
+        function showSignup() {
+            loginForm.classList.add('hidden');
+            signupForm.classList.remove('hidden');
+            document.getElementById('signupError').textContent = '';
+        }
+        
+        async function showDashboard(user) {
+            authContainer.classList.add('hidden');
+            dashboard.classList.remove('hidden');
+            
+            // Display user info
+            userInfo.innerHTML = `
+                <div class="user-info">
+                    <div class="avatar">${user.email[0].toUpperCase()}</div>
+                    <div>
+                        <strong>${user.user_metadata?.full_name || user.email}</strong>
+                        <div>${user.email}</div>
+                    </div>
+                </div>
+            `;
+            
+            // Load posts
+            await loadPosts();
+        }
+        
+        async function signup() {
+            const email = document.getElementById('signupEmail').value;
+            const password = document.getElementById('signupPassword').value;
+            const name = document.getElementById('signupName').value;
+            const errorElement = document.getElementById('signupError');
+            
+            try {
+                const { data, error } = await supabase.auth.signUp({
+                    email,
+                    password,
+                    options: {
+                        data: {
+                            full_name: name
+                        }
+                    }
+                });
+                
+                if (error) throw error;
+                
+                if (data.user) {
+                    // Create user profile in database
+                    const { error: profileError } = await supabase
+                        .from('profiles')
+                        .insert([
+                            { 
+                                id: data.user.id, 
+                                email: data.user.email,
+                                full_name: name,
+                                created_at: new Date()
+                            }
+                        ]);
+                    
+                    if (profileError) throw profileError;
+                    
+                    showDashboard(data.user);
+                }
+            } catch (error) {
+                errorElement.textContent = error.message;
+            }
+        }
+        
+        async function login() {
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            const errorElement = document.getElementById('loginError');
+            
+            try {
+                const { data, error } = await supabase.auth.signInWithPassword({
+                    email,
+                    password
+                });
+                
+                if (error) throw error;
+                
+                if (data.user) {
+                    showDashboard(data.user);
+                }
+            } catch (error) {
+                errorElement.textContent = error.message;
+            }
+        }
+        
+        async function logout() {
+            await supabase.auth.signOut();
+            showLogin();
+        }
+        
+        async function createPost() {
+            const content = document.getElementById('postContent').value;
+            const { data: { user } } = await supabase.auth.getUser();
+            
+            if (!content.trim()) return;
+            
+            try {
+                const { error } = await supabase
+                    .from('posts')
+                    .insert([
+                        { 
+                            content: content,
+                            user_id: user.id,
+                            created_at: new Date()
+                        }
+                    ]);
+                
+                if (error) throw error;
+                
+                document.getElementById('postContent').value = '';
+                await loadPosts();
+            } catch (error) {
+                console.error('Error creating post:', error);
+            }
+        }
+        
+        async function loadPosts() {
+            try {
+                const { data: posts, error } = await supabase
+                    .from('posts')
+                    .select(`
+                        *,
+                        profiles:user_id (
+                            full_name,
+                            email
+                        )
+                    `)
+                    .order('created_at', { ascending: false });
+                
+                if (error) throw error;
+                
+                postsFeed.innerHTML = '';
+                
+                if (posts && posts.length > 0) {
+                    posts.forEach(post => {
+                        const postElement = document.createElement('div');
+                        postElement.className = 'post';
+                        postElement.innerHTML = `
+                            <div class="user-info">
+                                <div class="avatar">${post.profiles.email[0].toUpperCase()}</div>
+                                <div>
+                                    <strong>${post.profiles.full_name}</strong>
+                                    <div class="post-time">${new Date(post.created_at).toLocaleString()}</div>
+                                </div>
+                            </div>
+                            <p>${post.content}</p>
+                        `;
+                        postsFeed.appendChild(postElement);
+                    });
+                } else {
+                    postsFeed.innerHTML = '<p>No posts yet. Be the first to post!</p>';
+                }
+            } catch (error) {
+                console.error('Error loading posts:', error);
+            }
+        }
+        
+        // Listen for auth state changes
+        supabase.auth.onAuthStateChange((event, session) => {
+            if (event === 'SIGNED_IN' && session) {
+                showDashboard(session.user);
+            } else if (event === 'SIGNED_OUT') {
+                showLogin();
+            }
+        });
+    </script>
+</body>
+</html>
